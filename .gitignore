@@ -1,0 +1,27 @@
+# --- Python 관련 (가상환경 및 컴파일 파일 제외) ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+
+# --- 운영체제 관련 (맥/윈도우 시스템 파일 제외) ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- 보안 관련 (민감한 정보 제외 - 절대 올리면 안 됨!) ---
+.env
+*.pem
+*.key
+
+# --- IDE 설정 파일 (VS Code, Pycharm 설정 제외) ---
+.vscode/
+.idea/
+
+# --- 프로젝트 데이터 관련 (로컬 DB 및 Docker 볼륨 제외) ---
+db_data/
+*.sqlite3
+*.log

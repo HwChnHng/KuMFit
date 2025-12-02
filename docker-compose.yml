@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  # 1. RabbitMQ (이벤트 브로커)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: kumfit_rabbitmq
+    ports:
+      - "5672:5672"   # 코드 통신용 포트
+      - "15672:15672" # 관리자 웹 UI 포트
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # 2. Database (PostgreSQL 추천 - 설정 쉬움)
+  db:
+    image: postgres:13
+    container_name: kumfit_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: kumfit_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
