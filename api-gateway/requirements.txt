@@ -1,0 +1,5 @@
+flask
+pika
+pymysql
+sqlalchemy
+flask-cors
