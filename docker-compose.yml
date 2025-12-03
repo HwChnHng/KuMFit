@@ -1,29 +1,68 @@
 version: "3.8"
 
 services:
-  # 1. RabbitMQ (이벤트 브로커)
+  # 1. 메시지 브로커 (RabbitMQ)
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: kumfit_rabbitmq
     ports:
-      - "5672:5672"   # 코드 통신용 포트
-      - "15672:15672" # 관리자 웹 UI 포트
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
-  # 2. Database (PostgreSQL 추천 - 설정 쉬움)
+  # 2. 데이터베이스 (MySQL 8.0)
   db:
-    image: postgres:13
-    container_name: kumfit_db
+    image: mysql:8.0
     ports:
-      - "5432:5432"
+      - "3306:3306"
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: kumfit_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: kumfit
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  # 3. 크롤러 (Producer)
+  producer:
+    build: ./producer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+    restart: on-failure
+
+  # 4. 추천 엔진 (Consumer)
+  consumer:
+    build: ./consumer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_started
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      DB_HOST: db
+
+  # 5. 웹 서버 (API Gateway)
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "5000:5000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_started
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      DB_HOST: db
 
 volumes:
   db_data:
