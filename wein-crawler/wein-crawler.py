@@ -190,7 +190,7 @@ def crawl_weinzon(user_id: str, user_pw: str):
 
         print(f"총 {len(all_results)}개 프로그램 수집 완료 (신청/대기신청만 포함)")
 
-        input("\n브라우저 화면 확인 후 엔터를 누르면 종료합니다...")
+        return all_results
 
     finally:
         driver.quit()
@@ -206,4 +206,17 @@ if __name__ == "__main__":
     if not WEIN_PW:
         WEIN_PW = input("위인전 비밀번호를 입력하세요: ")
 
-    crawl_weinzon(WEIN_ID, WEIN_PW)
+    while True:
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n===== {now} : 위인전 크롤링 1회 시작 =====")
+
+        try:
+            crawl_weinzon(WEIN_ID, WEIN_PW)
+        except Exception as e:
+            print("[에러] 크롤링 중 오류 발생:", e)
+
+        now_end = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"===== {now_end} : 크롤링 1회 종료, 1시간 대기 =====\n")
+
+        # 1시간(3600초) 대기
+        time.sleep(3600)
