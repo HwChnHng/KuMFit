@@ -21,6 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 5. [수정됨] Broker 모듈 복사 (broker 폴더 -> 컨테이너 안으로)
 COPY broker /app/broker
 
+COPY common /app/common
+
 # 6. 프로듀서 소스 코드 복사
 COPY producer .
 
