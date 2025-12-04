@@ -10,21 +10,38 @@ from .models import Program, Recommendation, TimeTable, User
 # ---------------------------------------------------------
 # 1. 사용자 (User) 관련
 # ---------------------------------------------------------
-def upsert_user(db: Session, student_id: str, name: str, password_hash: str = None):
-    """로그인 시 사용자 정보 생성 또는 업데이트"""
+def create_user(db: Session, student_id: str, name: str, password_hash: str = None):
+    """
+    사용자 신규 생성
+    이미 존재하는 경우 생성하지 않고 기존 사용자 정보를 반환합니다.
+    """
     user = db.query(User).filter(User.student_id == student_id).first()
 
     if user:
-        user.name = name
-        if password_hash:
-            user.password_hash = password_hash
-    else:
-        user = User(student_id=student_id, name=name, password_hash=password_hash)
-        db.add(user)
+        # 이미 존재하면 해당 유저 객체 반환 (혹은 에러 발생 처리가 필요하면 수정 가능)
+        return user
 
+    # 존재하지 않으면 새로 생성
+    user = User(student_id=student_id, name=name, password_hash=password_hash)
+    db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+
+def delete_user(db: Session, student_id: str):
+    """
+    사용자 삭제
+    models.py의 cascade 설정에 의해 연결된 TimeTable, Recommendation도 함께 삭제됩니다.
+    """
+    user = db.query(User).filter(User.student_id == student_id).first()
+
+    if not user:
+        return False  # 삭제할 대상이 없음
+
+    db.delete(user)
+    db.commit()
+    return True
 
 
 def get_user_by_id(db: Session, student_id: str):
@@ -114,7 +131,7 @@ def get_all_programs(db: Session):
 # 4. 추천 결과 (Recommendation) 관련 - Consumer/Gateway용
 # ---------------------------------------------------------
 def save_recommendation(db: Session, student_id: str, results: List[Dict]):
-    """추천 결과(JSON) 저장"""
+    """추천 결과(JSON) 저장(Recommendation Consumer)"""
     try:
         # 기존 추천 내역 확인
         rec = (
@@ -139,7 +156,7 @@ def save_recommendation(db: Session, student_id: str, results: List[Dict]):
 
 
 def get_recommendation(db: Session, student_id: str):
-    """학생의 추천 결과 조회"""
+    """학생의 추천 결과 조회(API Gateway)"""
     rec = (
         db.query(Recommendation).filter(Recommendation.student_id == student_id).first()
     )
