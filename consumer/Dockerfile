@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY broker /app/broker
 
+COPY common /app/common
+
 # 5. 소스 코드 복사
 COPY consumer .
 

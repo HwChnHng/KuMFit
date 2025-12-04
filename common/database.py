@@ -1,0 +1,32 @@
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+# Docker Compose 내부 통신용 URL
+DATABASE_URL = "mysql+pymysql://root:root@db:3306/kumfit"
+
+# 1. 엔진 생성
+engine = create_engine(DATABASE_URL, echo=True)
+
+# 2. 세션 공장 생성
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# 3. 모델의 조상 클래스 (Base) 생성
+# models.py에서 이 Base를 상속받아 클래스를 만들게 됩니다.
+Base = declarative_base()
+
+
+# 4. DB 세션 생성 및 종료를 관리하는 헬퍼 함수 (Context Manager 패턴)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# DB 테이블을 생성하는 함수.
+def init_db():
+    import common.models
+
+    Base.metadata.create_all(bind=engine)
+    print("[DB] 테이블 초기화 완료")
