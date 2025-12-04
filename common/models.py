@@ -15,7 +15,7 @@ class User(Base):
 
     student_id = Column(String(20), primary_key=True)
     name = Column(String(50), nullable=False)
-    password_hash = Column(String(128))
+    password_hash = Column(String(128), nullable=False)
     last_synced_at = Column(DateTime, nullable=True)
 
     timetables = relationship(
