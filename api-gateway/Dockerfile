@@ -4,10 +4,12 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y default-libmysqlclient-dev gcc
 
-COPY requirements.txt .
+COPY api-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY broker /app/broker
+
+COPY api-gateway .
 
 EXPOSE 5000
 

@@ -11,11 +11,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. 라이브러리 설치
-COPY requirements.txt .
+COPY consumer/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY broker /app/broker
+
 # 5. 소스 코드 복사
-COPY . .
+COPY consumer .
 
 # 6. 실행 명령어 (main.py가 있다고 가정)
 CMD ["python", "-u", "main.py"]

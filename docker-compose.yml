@@ -28,19 +28,25 @@ services:
       - db_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
 
-  # 3. 크롤러 (Producer)
+  # 3. 크롤러 (Producer) - [수정됨]
   producer:
-    build: ./producer
+    build:
+      context: .                    
+      dockerfile: producer/Dockerfile  
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
       RABBITMQ_HOST: rabbitmq
+      # WEIN_ID: "여기에_아이디" (필요시 주석 해제)
+      # WEIN_PW: "여기에_비번"
     restart: on-failure
 
-  # 4. 추천 엔진 (Consumer)
+  # 4. 추천 엔진 (Consumer) - [수정됨]
   consumer:
-    build: ./consumer
+    build:
+      context: .
+      dockerfile: consumer/Dockerfile
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -50,11 +56,13 @@ services:
       RABBITMQ_HOST: rabbitmq
       DB_HOST: db
 
-  # 5. 웹 서버 (API Gateway)
+  # 5. 웹 서버 (API Gateway) - [수정됨]
   api-gateway:
-    build: ./api-gateway
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
     ports:
-      - "5000:5000"
+      - "5000:5000" 
     depends_on:
       rabbitmq:
         condition: service_healthy
