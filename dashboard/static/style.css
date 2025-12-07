@@ -191,27 +191,7 @@ body {
 }
 .program-period {
     font-size: 12px;
-    color: #6b7280; /* 기존 텍스트 회색 톤이랑 비슷하게 */
+    color: #6b7280; 
     margin-top: 4px;
 }
-/* 위인전 패널: 목록이 많으면 내부 스크롤 */
-.wein-scroll {
-    max-height: 360px;       /* 높이 적당히 조절해도 됨 */
-    overflow-y: auto;
-    padding-right: 4px;      /* 스크롤 옆 글자 안 잘리게 약간 여유 */
-}
 
-/* (선택) 스크롤바 예쁘게 – 크롬 기준 */
-.wein-scroll::-webkit-scrollbar {
-    width: 6px;
-}
-
-.wein-scroll::-webkit-scrollbar-track {
-    background: #f3f4f6;
-    border-radius: 4px;
-}
-
-.wein-scroll::-webkit-scrollbar-thumb {
-    background: #d1d5db;
-    border-radius: 4px;
-}
