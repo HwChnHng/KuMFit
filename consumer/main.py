@@ -62,6 +62,7 @@ def handle_everytime(ch, method, properties, body):
 
         # 크롤러 결과 → DB 스키마에 맞게 매핑
         timetable = []
+
         def to_min(tstr: str):
             try:
                 h, m = tstr.split(":")
@@ -76,7 +77,7 @@ def handle_everytime(ch, method, properties, body):
             return f"{h:02d}:{m:02d}"
 
         START_OFFSET = 9 * 60  # +9시간
-        END_ADJUST = -2        # 종료 시간에서 2분 감소
+        END_ADJUST = -2  # 종료 시간에서 2분 감소
 
         for idx, item in enumerate(raw_tt, start=1):
             start_raw = item.get("start") or item.get("start_time") or ""
@@ -101,10 +102,12 @@ def handle_everytime(ch, method, properties, body):
                 }
             )
 
-        with next(get_db()) as db:
+        with get_db() as db:
             if timetable:
                 crud.save_timetables(db, student_id, timetable)
-                print(f" [everytime] 시간표 저장 완료: {student_id}, {len(timetable)}건")
+                print(
+                    f" [everytime] 시간표 저장 완료: {student_id}, {len(timetable)}건"
+                )
             else:
                 print(" [everytime] 저장할 시간표가 없습니다.")
 
@@ -122,7 +125,7 @@ def handle_everytime(ch, method, properties, body):
 # 추천 더미 생성
 # -------------------------------
 def generate_recommendations(student_id: str):
-    with next(get_db()) as db:
+    with get_db() as db:
         programs = crud.get_all_programs(db)
     recs = []
     for prog in programs[:5]:
@@ -154,7 +157,7 @@ def handle_crawl_done(ch, method, properties, body):
         print(f" [recommend] crawl_done 수신: {student_id}")
         recs = generate_recommendations(student_id)
 
-        with next(get_db()) as db:
+        with get_db() as db:
             crud.save_recommendation(db, student_id, recs)
         print(f" [recommend] 추천 저장 완료: {student_id}, {len(recs)}건")
 
@@ -189,8 +192,12 @@ def main():
     init_db()
 
     threads = [
-        threading.Thread(target=consume, args=(EVERYTIME_QUEUE, handle_everytime), daemon=True),
-        threading.Thread(target=consume, args=(CRAWL_DONE_QUEUE, handle_crawl_done), daemon=True),
+        threading.Thread(
+            target=consume, args=(EVERYTIME_QUEUE, handle_everytime), daemon=True
+        ),
+        threading.Thread(
+            target=consume, args=(CRAWL_DONE_QUEUE, handle_crawl_done), daemon=True
+        ),
     ]
 
     for t in threads:
