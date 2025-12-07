@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>KuMFit 대시보드</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="page">
+<header class="top-bar">
+<div class="logo">KuMFit</div>
+<div class="user-info">
+<span class="user-name">안녕하세요, 사용자님 👋</span>
+</div>
+</header>
+
+
+<main class="main-layout">
+    <!-- 왼쪽: 추천 비교과 -->
+    <section class="panel">
+        <div class="panel-header">
+            <h2>추천 비교과</h2>
+            <div class="recommend-filters" id="category-chips">
+    <button type="button" class="chip {% if current_category == 'all' %}active{% endif %}" data-category="all">전체</button>
+    <button type="button" class="chip {% if current_category == 'genl' %}active{% endif %}" data-category="genl">일반비교과</button>
+    <button type="button" class="chip {% if current_category == 'emplym' %}active{% endif %}" data-category="emplym">취창업비교과</button>
+    <button type="button" class="chip {% if current_category == 'grup' %}active{% endif %}" data-category="grup">단과대비교과</button>
+	   </div>
+
+        </div>
+        <div class="panel-body">
+        {% if recommendations %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>제목</th>
+                        <th>분류</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recommendations %}
+                    <tr>
+                        <td>{{ item.title }}</td>
+                        <td>{{ item.category }}</td>
+                        <td>
+                            <span class="badge
+                                {% if item.status == '신청가능' %} badge-green
+                                {% elif item.status == '대기신청' %} badge-yellow
+                                {% else %} badge-gray
+                                {% endif %}
+                            ">
+                                {{ item.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="empty-text">현재 추천된 비교과가 없습니다.</p>
+        {% endif %}
+    </div>
+    </section>
+
+    <!-- 오른쪽: 위인전 크롤러 결과 -->
+   <section class="panel">
+    <div class="panel-header">
+        <h2>위인전 프로그램 현황</h2>
+        <button class="btn btn-outline" disabled>1시간마다 자동 업데이트</button>
+    </div>
+    <div class="panel-body">
+        {% if wein_programs %}
+            <ul class="program-list">
+                {% for prog in wein_programs %}
+                <li class="program-item">
+                    <div class="program-title">{{ prog.title }}</div>
+
+                    {% if prog.apply_period %}
+                    <div class="program-period">
+                        신청기간: {{ prog.apply_period }}
+                    </div>
+                    {% endif %}
+
+                    <div class="program-meta">
+                        <span class="badge
+                            {% if prog.status == '신청' or prog.status == '신청가능' %} badge-green
+                            {% elif prog.status == '대기신청' %} badge-yellow
+                            {% else %} badge-gray
+                            {% endif %}
+                        ">
+                            {{ prog.status }}
+                        </span>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty-text">현재 수집된 위인전 프로그램이 없습니다.</p>
+        {% endif %}
+    </div>
+</section>
+
+	
+        
+
+
+                 
+</main>
+
+<footer class="footer">
+    <span>© 2025 KuMFit Team 2조</span>
+</footer>
+
+
+
+</div>
+</body>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const chips = document.querySelectorAll("#category-chips .chip");
+
+    chips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            // 모든 chip에서 active 제거
+            chips.forEach(c => c.classList.remove("active"));
+
+            // 클릭한 chip에 active 추가
+            chip.classList.add("active");
+
+            // 선택된 분류 category 값 가져오기
+            const category = chip.dataset.category;
+
+            // 페이지 이동 -> Flask로 전달
+            window.location.href = `/?category=${category}`;
+        });
+    });
+
+    // 현재 선택된 카테고리 반영
+    const currentCategory = "{{ current_category }}";
+    chips.forEach(chip => {
+        if (chip.dataset.category === currentCategory) {
+            chip.classList.add("active");
+        }
+    });
+});
+</script>
+
+</html>
