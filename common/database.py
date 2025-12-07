@@ -1,4 +1,7 @@
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import OperationalError
 
@@ -17,6 +20,8 @@ Base = declarative_base()
 
 
 # 4. DB 세션 생성 및 종료를 관리하는 헬퍼 함수 (Context Manager 패턴)
+# @contextmanager 데코레이터 [추가]
+@contextmanager
 def get_db():
     db = SessionLocal()
     try:

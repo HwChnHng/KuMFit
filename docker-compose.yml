@@ -41,8 +41,8 @@ services:
         condition: service_healthy
     environment:
       RABBITMQ_HOST: rabbitmq
-      # WEIN_ID: "kjh010916" 
-      # WEIN_PW: "ronaldo7!"
+      # WEIN_ID: "" 
+      # WEIN_PW: ""
     restart: on-failure
 
   # 4. 추천 엔진 (Consumer) - [수정됨]
