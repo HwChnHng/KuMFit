@@ -15,4 +15,4 @@ COPY api-gateway .
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["python", "main.py"]

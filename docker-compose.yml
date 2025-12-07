@@ -26,7 +26,10 @@ services:
       MYSQL_DATABASE: kumfit
     volumes:
       - db_data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
+    command: >-
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
 
   # 3. 크롤러 (Producer) - [수정됨]
   producer:
@@ -38,8 +41,8 @@ services:
         condition: service_healthy
     environment:
       RABBITMQ_HOST: rabbitmq
-      # WEIN_ID: "여기에_아이디" (필요시 주석 해제)
-      # WEIN_PW: "여기에_비번"
+      # WEIN_ID: "" 
+      # WEIN_PW: ""
     restart: on-failure
 
   # 4. 추천 엔진 (Consumer) - [수정됨]

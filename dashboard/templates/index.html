@@ -8,12 +8,19 @@
 <body>
 <div class="page">
 <header class="top-bar">
-<div class="logo">KuMFit</div>
-<div class="user-info">
-<span class="user-name">안녕하세요, 사용자님 👋</span>
-</div>
+    <div class="logo">KuMFit</div>
+    <div class="user-info">
+        <form id="login-form" class="login-form">
+            <input type="text" id="studentId" name="studentId" placeholder="학번" required />
+            <input type="text" id="name" name="name" placeholder="이름" required />
+            <input type="password" id="password" name="password" placeholder="비밀번호(선택)" />
+            <input type="text" id="timetableUrl" name="timetableUrl" placeholder="에브리타임 시간표 공유 URL" />
+            <button type="submit">로그인</button>
+            <button type="button" id="logout-btn" disabled>로그아웃</button>
+        </form>
+        <span class="user-name" id="login-status">로그인 필요</span>
+    </div>
 </header>
-
 
 <main class="main-layout">
     <!-- 왼쪽: 추천 비교과 -->
@@ -21,15 +28,13 @@
         <div class="panel-header">
             <h2>추천 비교과</h2>
             <div class="recommend-filters" id="category-chips">
-    <button type="button" class="chip {% if current_category == 'all' %}active{% endif %}" data-category="all">전체</button>
-    <button type="button" class="chip {% if current_category == 'genl' %}active{% endif %}" data-category="genl">일반비교과</button>
-    <button type="button" class="chip {% if current_category == 'emplym' %}active{% endif %}" data-category="emplym">취창업비교과</button>
-    <button type="button" class="chip {% if current_category == 'grup' %}active{% endif %}" data-category="grup">단과대비교과</button>
-	   </div>
-
+                <button type="button" class="chip {% if current_category == 'all' %}active{% endif %}" data-category="all">전체</button>
+                <button type="button" class="chip {% if current_category == 'genl' %}active{% endif %}" data-category="genl">일반비교과</button>
+                <button type="button" class="chip {% if current_category == 'emplym' %}active{% endif %}" data-category="emplym">취창업비교과</button>
+                <button type="button" class="chip {% if current_category == 'grup' %}active{% endif %}" data-category="grup">단과대비교과</button>
+            </div>
         </div>
         <div class="panel-body">
-        {% if recommendations %}
             <table class="table">
                 <thead>
                     <tr>
@@ -38,112 +43,234 @@
                         <th>상태</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for item in recommendations %}
-                    <tr>
-                        <td>{{ item.title }}</td>
-                        <td>{{ item.category }}</td>
-                        <td>
-                            <span class="badge
-                                {% if item.status == '신청가능' %} badge-green
-                                {% elif item.status == '대기신청' %} badge-yellow
-                                {% else %} badge-gray
-                                {% endif %}
-                            ">
-                                {{ item.status }}
-                            </span>
-                        </td>
-                    </tr>
-                    {% endfor %}
+                <tbody id="reco-body">
+                    <tr><td colspan="3" class="empty-text">로그인 후 추천을 불러옵니다.</td></tr>
                 </tbody>
             </table>
-        {% else %}
-            <p class="empty-text">현재 추천된 비교과가 없습니다.</p>
-        {% endif %}
-    </div>
+        </div>
     </section>
 
     <!-- 오른쪽: 위인전 크롤러 결과 -->
-   <section class="panel">
-    <div class="panel-header">
-        <h2>위인전 프로그램 현황</h2>
-        <button class="btn btn-outline" disabled>1시간마다 자동 업데이트</button>
-    </div>
-    <div class="panel-body">
-        {% if wein_programs %}
-            <ul class="program-list">
-                {% for prog in wein_programs %}
+    <section class="panel">
+        <div class="panel-header">
+            <h2>위인전 프로그램 현황</h2>
+            <button class="btn btn-outline" disabled>크롤러 주기: 1시간</button>
+        </div>
+        <div class="panel-body">
+            <ul class="program-list" id="program-list">
                 <li class="program-item">
-                    <div class="program-title">{{ prog.title }}</div>
-
-                    {% if prog.apply_period %}
-                    <div class="program-period">
-                        신청기간: {{ prog.apply_period }}
-                    </div>
-                    {% endif %}
-
-                    <div class="program-meta">
-                        <span class="badge
-                            {% if prog.status == '신청' or prog.status == '신청가능' %} badge-green
-                            {% elif prog.status == '대기신청' %} badge-yellow
-                            {% else %} badge-gray
-                            {% endif %}
-                        ">
-                            {{ prog.status }}
-                        </span>
-                    </div>
+                    <div class="program-title">로그인 후 프로그램을 불러옵니다.</div>
                 </li>
-                {% endfor %}
             </ul>
-        {% else %}
-            <p class="empty-text">현재 수집된 위인전 프로그램이 없습니다.</p>
-        {% endif %}
-    </div>
-</section>
-
-	
-        
-
-
-                 
+        </div>
+    </section>
 </main>
 
 <footer class="footer">
     <span>© 2025 KuMFit Team 2조</span>
 </footer>
-
-
-
 </div>
-</body>
+
 <script>
+const apiBase = "{{ api_base }}";
+
 document.addEventListener("DOMContentLoaded", function () {
     const chips = document.querySelectorAll("#category-chips .chip");
+    const loginForm = document.getElementById("login-form");
+    const logoutBtn = document.getElementById("logout-btn");
+    const loginStatus = document.getElementById("login-status");
+    const recoBody = document.getElementById("reco-body");
+    const programList = document.getElementById("program-list");
+    const studentIdInput = document.getElementById("studentId");
+    const nameInput = document.getElementById("name");
+    const passwordInput = document.getElementById("password");
+    const timetableUrlInput = document.getElementById("timetableUrl");
+
+    let token = localStorage.getItem("kumfit_token") || "";
+    let studentId = localStorage.getItem("kumfit_studentId") || "";
+    let timetableUrl = localStorage.getItem("kumfit_timetableUrl") || "";
+    let syncTimer = null;
+
+    function setLoggedIn(id, t) {
+        token = t;
+        studentId = id;
+        localStorage.setItem("kumfit_token", t);
+        localStorage.setItem("kumfit_studentId", id);
+        if (timetableUrlInput.value) {
+            timetableUrl = timetableUrlInput.value.trim();
+            localStorage.setItem("kumfit_timetableUrl", timetableUrl);
+        }
+        loginStatus.textContent = `로그인: ${id}`;
+        logoutBtn.disabled = false;
+        startSyncLoop();
+    }
+
+    function setLoggedOut() {
+        token = "";
+        studentId = "";
+        localStorage.removeItem("kumfit_token");
+        localStorage.removeItem("kumfit_studentId");
+        localStorage.removeItem("kumfit_timetableUrl");
+        timetableUrl = "";
+        loginStatus.textContent = "로그인 필요";
+        logoutBtn.disabled = true;
+        recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">로그인 후 추천을 불러옵니다.</td></tr>`;
+        programList.innerHTML = `<li class="program-item"><div class="program-title">로그인 후 프로그램을 불러옵니다.</div></li>`;
+        if (syncTimer) {
+            clearInterval(syncTimer);
+            syncTimer = null;
+        }
+    }
+
+    async function fetchWithAuth(url, options = {}) {
+        if (!token) throw new Error("no token");
+        const res = await fetch(url, {
+            ...options,
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+                ...(options.headers || {})
+            }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    }
+
+    async function loadRecommendations() {
+        if (!studentId || !token) return;
+        try {
+            const data = await fetchWithAuth(`${apiBase}/recommendations/${studentId}`);
+            if (!data || data.length === 0) {
+                recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">추천 데이터가 없습니다.</td></tr>`;
+                return;
+            }
+            const rows = data.map(item => `
+                <tr>
+                    <td>${item.title || ""}</td>
+                    <td>${item.category || ""}</td>
+                    <td><span class="badge badge-green">${item.status || "추천"}</span></td>
+                </tr>
+            `).join("");
+            recoBody.innerHTML = rows;
+        } catch (e) {
+            recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">추천을 불러오지 못했습니다.</td></tr>`;
+        }
+    }
+
+    async function loadPrograms() {
+        if (!token) return;
+        try {
+            const data = await fetchWithAuth(`${apiBase}/programs`);
+            if (!data || data.length === 0) {
+                programList.innerHTML = `<li class="program-item"><div class="program-title">프로그램이 없습니다.</div></li>`;
+                return;
+            }
+            programList.innerHTML = data.map(prog => `
+                <li class="program-item">
+                    <div class="program-title">${prog.title || ""}</div>
+                    ${prog.apply_start && prog.apply_end ? `<div class="program-period">신청기간: ${prog.apply_start} ~ ${prog.apply_end}</div>` : ""}
+                    <div class="program-meta">
+                        <span class="badge badge-green">${prog.topic || "비교과"}</span>
+                    </div>
+                </li>
+            `).join("");
+        } catch (e) {
+            programList.innerHTML = `<li class="program-item"><div class="program-title">프로그램을 불러오지 못했습니다.</div></li>`;
+        }
+    }
+
+    async function triggerSync() {
+        if (!token) return;
+        try {
+            const body = {};
+            if (timetableUrl) body.timetableUrl = timetableUrl;
+            await fetchWithAuth(`${apiBase}/sync/everytime`, {
+                method: "POST",
+                body: JSON.stringify(body)
+            });
+        } catch (e) {
+            console.warn("sync failed", e);
+        }
+    }
+
+    function startSyncLoop() {
+        if (syncTimer) clearInterval(syncTimer);
+        triggerSync();
+        syncTimer = setInterval(triggerSync, 10 * 60 * 1000); // 10분
+    }
+
+    async function checkSession() {
+        if (!token) return;
+        try {
+            await fetchWithAuth(`${apiBase}/session`);
+            setLoggedIn(studentId, token);
+            loadRecommendations();
+            loadPrograms();
+        } catch (e) {
+            setLoggedOut();
+        }
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const sid = studentIdInput.value.trim();
+        const nm = nameInput.value.trim();
+        const pw = passwordInput.value.trim();
+        const tt = timetableUrlInput.value.trim();
+        if (!sid || !nm) return;
+        try {
+            const res = await fetch(`${apiBase}/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ studentId: sid, name: nm, password: pw })
+            });
+            if (!res.ok) throw new Error("login failed");
+            const data = await res.json();
+            if (tt) {
+                timetableUrl = tt;
+                localStorage.setItem("kumfit_timetableUrl", timetableUrl);
+            }
+            setLoggedIn(data.studentId, data.token);
+            passwordInput.value = "";
+            loadRecommendations();
+            loadPrograms();
+        } catch (err) {
+            alert("로그인에 실패했습니다.");
+        }
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+        if (!token) return;
+        try {
+            await fetchWithAuth(`${apiBase}/logout`, { method: "POST" });
+        } catch (e) {
+            // ignore
+        }
+        setLoggedOut();
+    });
 
     chips.forEach(chip => {
         chip.addEventListener("click", () => {
-            // 모든 chip에서 active 제거
             chips.forEach(c => c.classList.remove("active"));
-
-            // 클릭한 chip에 active 추가
             chip.classList.add("active");
-
-            // 선택된 분류 category 값 가져오기
             const category = chip.dataset.category;
-
-            // 페이지 이동 -> Flask로 전달
             window.location.href = `/?category=${category}`;
         });
     });
 
-    // 현재 선택된 카테고리 반영
     const currentCategory = "{{ current_category }}";
     chips.forEach(chip => {
         if (chip.dataset.category === currentCategory) {
             chip.classList.add("active");
         }
     });
+
+    if (timetableUrl) {
+        timetableUrlInput.value = timetableUrl;
+    }
+
+    checkSession();
 });
 </script>
-
+</body>
 </html>
