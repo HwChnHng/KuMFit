@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.exc import OperationalError
 
-# Docker Compose 내부 통신용 URL
-DATABASE_URL = "mysql+pymysql://root:root@db:3306/kumfit"
+# Docker Compose 내부 통신용 URL (utf8mb4로 고정)
+DATABASE_URL = "mysql+pymysql://root:root@db:3306/kumfit?charset=utf8mb4"
 
 # 1. 엔진 생성
 engine = create_engine(DATABASE_URL, echo=True)
@@ -28,5 +29,12 @@ def get_db():
 def init_db():
     import common.models
 
-    Base.metadata.create_all(bind=engine)
-    print("[DB] 테이블 초기화 완료")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[DB] 테이블 초기화 완료")
+    except OperationalError as e:
+        # 다른 서비스가 이미 생성한 경우 1050 에러가 날 수 있음 -> 무시
+        if getattr(e.orig, "args", []) and e.orig.args[0] == 1050:
+            print("[DB] 테이블 이미 존재함, 생성 건너뜀")
+        else:
+            raise

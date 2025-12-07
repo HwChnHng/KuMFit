@@ -4,6 +4,8 @@ import sys
 import getpass  # 비밀번호 입력 시 화면에 안 보이게 하는 라이브러리
 
 from broker.event_broker import EventBroker
+from common import crud
+from common.database import SessionLocal
 
 try:
     import wein_crawler as crawler
@@ -45,9 +47,11 @@ def main():
         print(" [!] 인증 정보가 없어 프로그램을 종료합니다.")
         return
 
+    done_queue = os.getenv("WEIN_DONE_QUEUE", "wein_updates_done")
+
     # --- [브로커 연결] ---
     print(f" [*] RabbitMQ 브로커에 연결 중... (User: {user_id})")
-    broker = EventBroker(queue_name='weinjeon_updates')
+    broker = EventBroker(queue_name=done_queue)
 
     while True:
         print(f"\n [Cycle] 크롤링 시작... ({time.strftime('%H:%M:%S')})")
@@ -58,14 +62,17 @@ def main():
             
             if results:
                 print(f" [Crawling] {len(results)}건 수집 성공. 전송 준비...")
-                
-                message = {
-                    "event_type": "CRAWLING_COMPLETE",
-                    "timestamp": time.time(),
-                    "data": results
-                }
-                
-                broker.publish(message)
+                # DB 직접 저장
+                with SessionLocal() as db:
+                    crud.save_programs(db, results)
+                # 완료 이벤트만 발행 (데이터 미포함)
+                broker.publish(
+                    {
+                        "event_type": "CRAWLING_COMPLETE",
+                        "timestamp": time.time(),
+                        "count": len(results),
+                    }
+                )
             else:
                 print(" [Crawling] 수집된 데이터가 없습니다.")
 

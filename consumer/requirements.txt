@@ -3,3 +3,5 @@ pymysql
 sqlalchemy
 pandas
 scikit-learn
+beautifulsoup4
+selenium
