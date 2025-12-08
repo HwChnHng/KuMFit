@@ -120,6 +120,12 @@ def crawl_category(driver, list_url: str, category_name: str, max_pages: int = 1
                 apply_period = date_apply_el.text.strip()
             except Exception:
                 apply_period = ""
+	   # 진행기간 (예: "진행기간 2025.09.10 ~ 2025.12.31")
+            try:
+                date_run_el = card.find_element(By.CSS_SELECTOR, "p.date span.date02")
+                run_period = date_run_el.text.strip()
+            except Exception:
+                run_period = ""
 
             # 상태 (버튼에 적혀있는 텍스트: 신청 / 대기신청 / 신청마감 / 신청완료 등)
             site_status = extract_status_from_card(card)
@@ -138,6 +144,7 @@ def crawl_category(driver, list_url: str, category_name: str, max_pages: int = 1
                     "category": category_name,
                     "title": title,
                     "apply_period": apply_period,
+		    "run_period": run_period,
                     "site_status": site_status,
                 }
             )
@@ -185,6 +192,7 @@ def crawl_weinzon(user_id: str, user_pw: str):
         for r in all_results:
             print(f"[{r['category']}] {r['title']}")
             print(f"  신청기간 : {r['apply_period']}")
+            print(f"  진행기간 : {r.get('run_period', '')}")
             print(f"  상태     : {r['site_status']}")
             print()
 
