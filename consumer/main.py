@@ -132,28 +132,65 @@ def check_conflict(program, user_timetable):
 # -------------------------------
 def generate_recommendations(student_id: str):
     recommendations = []
+    now = datetime.now() # 현재 시간
     
     with get_db() as db:
+        # 1. 데이터 가져오기
         all_programs = crud.get_all_programs(db)
         user_timetable = crud.get_timetables(db, student_id)
         
         print(f" [Debug] 추천 계산 시작: 프로그램 {len(all_programs)}개")
 
+        candidates = []
         for prog in all_programs:
-            # 충돌이 '없는' 것만 추천
-            if not check_conflict(prog, user_timetable):
-                recommendations.append({
-                    "title": prog.title,
-                    "category": prog.topic or "일반",
-                    "status": "추천 (공강)",
-                    "program_id": prog.id
-                })
-        
-        recommendations.sort(key=lambda x: x['program_id'], reverse=True)
+            # (1) 시간표 충돌 검사
+            if check_conflict(prog, user_timetable):
+                continue # 충돌나면 패스
 
+            # (2) 마감일 체크 및 상태 메시지 생성
+            deadline = prog.apply_end
+            
+            # 정렬을 위한 키 설정 (마감일 없으면 아주 먼 미래로 설정해서 맨 뒤로 보냄)
+            sort_key = deadline if deadline else datetime(9999, 12, 31)
+            
+            status_text = "추천 (공강)" # 기본 멘트
+
+            if deadline:
+                # 이미 마감된 프로그램은 추천에서 제외
+                if deadline < now:
+                    continue
+                
+                days_left = (deadline - now).days
+                
+                if days_left <= 3:
+                    status_text = f"마감임박 ⏰ (D-{days_left})"
+                elif days_left <= 7:
+                    status_text = f"서두르세요 🏃 (D-{days_left})"
+                else:
+                    status_text = f"접수중 (D-{days_left})"
+            
+            candidates.append({
+                "title": prog.title,
+                "category": prog.topic or "일반",
+                "status": status_text,
+                "sort_key": sort_key # 정렬용 임시 데이터
+            })
+        
+        # (3) 정렬: 마감일 임박한 순서 (오름차순)
+        candidates.sort(key=lambda x: x['sort_key'])
+        
+        # (4) 최종 결과 생성 (임시 데이터 제거)
+        for item in candidates:
+            recommendations.append({
+                "title": item['title'],
+                "category": item['category'],
+                "status": item['status']
+            })
+
+    # 결과가 없으면 안내 메시지
     if not recommendations:
         recommendations.append({
-            "title": "공강 시간에 맞는 프로그램이 없습니다.",
+            "title": "현재 신청 가능한 공강 프로그램이 없습니다.",
             "category": "-",
             "status": ""
         })
