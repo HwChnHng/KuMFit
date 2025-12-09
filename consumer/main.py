@@ -24,62 +24,80 @@ EVERYTIME_URL_DEFAULT = os.getenv("EVERYTIME_URL")
 
 
 # -------------------------------
-# [핵심] 시간 충돌 판별 로직
+# [핵심] 시간 충돌 판별 로직 (요일 자동 계산 추가)
 # -------------------------------
-def parse_korean_time(time_str):
-    """ '14:00' 문자열을 분(minute) 단위 정수로 변환 """
+def is_time_overlap(start1, end1, start2, end2):
+    """ 두 시간 범위(분 단위)가 겹치는지 확인 """
+    return max(start1, start2) < min(end1, end2)
+
+def parse_time_str(time_str):
+    """ '14:00' -> 840 (분) """
     try:
-        if not time_str: return None
         h, m = map(int, time_str.split(':'))
         return h * 60 + m
     except:
         return None
 
-def is_time_overlap(start1, end1, start2, end2):
-    """ 두 시간 범위가 겹치는지 확인 (교집합이 있으면 True) """
-    return max(start1, start2) < min(end1, end2)
+def get_korean_weekday(date_obj):
+    """ 날짜 객체 -> '월', '화' 변환 """
+    days = ["월", "화", "수", "목", "금", "토", "일"]
+    return days[date_obj.weekday()]
 
 def check_conflict(program, user_timetable):
-    """
-    프로그램 시간(텍스트)과 사용자 시간표(DB데이터)를 비교하여 겹치면 True 반환
-    """
-    # 1. 프로그램 시간 정보가 없으면 '충돌 없음'으로 간주 (상시 활동 등)
     if not program.run_time_text:
         return False
         
     text = program.run_time_text
     
-    # 2. 프로그램 텍스트에서 '요일'과 '시간' 추출 (정규식 활용)
-    # 예: "9/10(수) 14:00~16:00" -> 요일:수, 시작:14:00, 끝:16:00
-    # 요일 패턴: (월) or 월요일 or 그냥 월
-    days_found = re.findall(r"([월화수목금토일])", text)
+    # 정규식으로 날짜와 시간 추출
+    # 예: "2025.12.30 10:00 ~ 2025.12.30 17:30"
+    # 패턴: YYYY.MM.DD HH:MM
+    pattern = r"(\d{4}\.\d{2}\.\d{2})\s+(\d{1,2}:\d{2})"
+    matches = re.findall(pattern, text)
     
-    # 시간 패턴: 14:00~16:00 or 14:00-16:00
-    time_match = re.search(r"(\d{1,2}:\d{2})\s*[~-]\s*(\d{1,2}:\d{2})", text)
-    
-    # 요일이나 시간이 명시되지 않았으면 충돌 판단 불가 -> '충돌 없음'으로 간주 (추천)
-    if not days_found or not time_match:
+    if len(matches) < 2:
+        # 날짜 형식이 아니거나 정보 부족하면 통과 (상시 활동 등)
         return False
         
-    prog_start = parse_korean_time(time_match.group(1))
-    prog_end = parse_korean_time(time_match.group(2))
+    start_date_str, start_time_str = matches[0]
+    end_date_str, end_time_str = matches[1]
     
-    if prog_start is None or prog_end is None:
-        return False
+    try:
+        # 날짜 객체로 변환
+        start_dt = datetime.strptime(start_date_str, "%Y.%m.%d")
+        end_dt = datetime.strptime(end_date_str, "%Y.%m.%d")
+        
+        # [판단 1] 기간이 다른 날짜에 걸쳐 있다면? (장기 프로그램)
+        # -> 보통 이런건 수업 시간이랑 1:1 비교가 무의미하므로 '충돌 없음'으로 간주
+        if start_dt.date() != end_dt.date():
+            return False 
 
-    # 3. 사용자 시간표와 비교
-    for tt in user_timetable:
-        # 요일이 같은 수업만 비교
-        if tt.day in days_found: 
-            class_start = parse_korean_time(tt.start_time)
-            class_end = parse_korean_time(tt.end_time)
-            
-            if class_start is not None and class_end is not None:
-                # 겹치면 충돌!
-                if is_time_overlap(prog_start, prog_end, class_start, class_end):
-                    return True
+        # [판단 2] 하루짜리 행사라면? -> 요일 계산해서 충돌 체크!
+        target_day = get_korean_weekday(start_dt) # 예: "화"
+        
+        prog_start_min = parse_time_str(start_time_str)
+        prog_end_min = parse_time_str(end_time_str)
+        
+        if prog_start_min is None or prog_end_min is None:
+            return False
+
+        # 사용자 시간표 루프
+        for tt in user_timetable:
+            if tt.day == target_day: # 요일 일치!
+                class_start = parse_time_str(tt.start_time)
+                class_end = parse_time_str(tt.end_time)
+                
+                if class_start and class_end:
+                    # 시간 겹치는지 확인
+                    if is_time_overlap(prog_start_min, prog_end_min, class_start, class_end):
+                        print(f" [Conflict] '{program.title}'({target_day} {start_time_str}) 겹침 -> 수업: {tt.subject_name}")
+                        return True # 충돌!
+
+    except Exception as e:
+        print(f" [Error] 날짜 파싱 실패 ({text}): {e}")
+        return False
                     
-    return False # 모든 수업과 비교했는데 안 겹침
+    return False # 모든 검사 통과
 
 
 # -------------------------------
@@ -89,24 +107,23 @@ def generate_recommendations(student_id: str):
     recommendations = []
     
     with get_db() as db:
-        # 1. 데이터 가져오기
         all_programs = crud.get_all_programs(db)
         user_timetable = crud.get_timetables(db, student_id)
         
-        # 2. 필터링: 시간 충돌이 없는 프로그램만 추천
+        print(f" [Debug] 추천 계산 시작: 프로그램 {len(all_programs)}개")
+
         for prog in all_programs:
+            # 충돌이 '없는' 것만 추천
             if not check_conflict(prog, user_timetable):
                 recommendations.append({
                     "title": prog.title,
                     "category": prog.topic or "일반",
-                    "status": "추천 (공강)",  # '신청가능' 대신 추천 사유 표시
-                    "program_id": prog.id    # 정렬을 위해 ID 저장
+                    "status": "추천 (공강)",
+                    "program_id": prog.id
                 })
         
-        # 3. 최신순 정렬 (ID 역순)
         recommendations.sort(key=lambda x: x['program_id'], reverse=True)
 
-    # 결과가 없으면 안내 메시지
     if not recommendations:
         recommendations.append({
             "title": "공강 시간에 맞는 프로그램이 없습니다.",
@@ -115,7 +132,6 @@ def generate_recommendations(student_id: str):
         })
         
     return recommendations
-
 
 # -------------------------------
 # 기존 로직 유지 (RabbitMQ 핸들러)
