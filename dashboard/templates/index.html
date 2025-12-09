@@ -74,6 +74,17 @@
 <script>
 const apiBase = "{{ api_base }}";
 
+// [핵심 1] 데이터를 저장해둘 전역 변수
+let allRecommendations = []; 
+
+// [핵심 2] 영어 코드와 한글 데이터 매핑
+const categoryMap = {
+    'all': '전체',
+    'genl': '일반비교과',
+    'emplym': '취창업비교과',
+    'grup': '단과대비교과'
+};
+
 document.addEventListener("DOMContentLoaded", function () {
     const chips = document.querySelectorAll("#category-chips .chip");
     const loginForm = document.getElementById("login-form");
@@ -90,6 +101,60 @@ document.addEventListener("DOMContentLoaded", function () {
     let studentId = localStorage.getItem("kumfit_studentId") || "";
     let timetableUrl = localStorage.getItem("kumfit_timetableUrl") || "";
     let syncTimer = null;
+
+    // -----------------------------------------------------------
+    // [핵심 3] 화면 그리기 전담 함수 (필터링 기능 포함)
+    // -----------------------------------------------------------
+    function renderTable(categoryKey) {
+        // 1. 데이터가 없으면 종료
+        if (!allRecommendations || allRecommendations.length === 0) {
+            recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">데이터가 없습니다.</td></tr>`;
+            return;
+        }
+
+        // 2. 필터링 (선택한 카테고리에 맞는 데이터만 남김)
+        let filteredData = allRecommendations;
+        if (categoryKey !== 'all') {
+            const targetName = categoryMap[categoryKey]; // 예: 'genl' -> '일반비교과'
+            // 데이터의 category 값이 타겟 이름과 같은지 확인
+            filteredData = allRecommendations.filter(item => item.category === targetName);
+        }
+
+        // 3. 결과가 없을 때 처리
+        if (filteredData.length === 0) {
+             recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">해당 카테고리 내역이 없습니다.</td></tr>`;
+             return;
+        }
+
+        // 4. HTML 생성 및 주입
+        const rows = filteredData.map(item => `
+            <tr>
+                <td>${item.title || ""}</td>
+                <td>${item.category || ""}</td>
+                <td><span class="badge badge-green">${item.status || "추천"}</span></td>
+            </tr>
+        `).join("");
+        recoBody.innerHTML = rows;
+    }
+
+    // -----------------------------------------------------------
+    // 버튼 클릭 이벤트 (페이지 이동 X -> 즉시 필터링 O)
+    // -----------------------------------------------------------
+    chips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            // 1. 모든 버튼에서 active 제거 후 클릭한 것에만 추가 (파란불 들어오게)
+            chips.forEach(c => c.classList.remove("active"));
+            chip.classList.add("active");
+
+            // 2. 선택된 카테고리로 테이블 다시 그리기
+            const category = chip.dataset.category;
+            renderTable(category);
+        });
+    });
+
+    // -----------------------------------------------------------
+    // 기존 기능들 (로그인, 데이터 로드 등)
+    // -----------------------------------------------------------
 
     function setLoggedIn(id, t) {
         token = t;
@@ -116,10 +181,7 @@ document.addEventListener("DOMContentLoaded", function () {
         logoutBtn.disabled = true;
         recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">로그인 후 추천을 불러옵니다.</td></tr>`;
         programList.innerHTML = `<li class="program-item"><div class="program-title">로그인 후 프로그램을 불러옵니다.</div></li>`;
-        if (syncTimer) {
-            clearInterval(syncTimer);
-            syncTimer = null;
-        }
+        if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
     }
 
     async function fetchWithAuth(url, options = {}) {
@@ -136,22 +198,20 @@ document.addEventListener("DOMContentLoaded", function () {
         return res.json();
     }
 
+    // [수정됨] 데이터를 가져와서 전역변수에 저장만 하고, 렌더링 함수 호출
     async function loadRecommendations() {
         if (!studentId || !token) return;
         try {
             const data = await fetchWithAuth(`${apiBase}/recommendations/${studentId}`);
-            if (!data || data.length === 0) {
-                recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">추천 데이터가 없습니다.</td></tr>`;
-                return;
-            }
-            const rows = data.map(item => `
-                <tr>
-                    <td>${item.title || ""}</td>
-                    <td>${item.category || ""}</td>
-                    <td><span class="badge badge-green">${item.status || "추천"}</span></td>
-                </tr>
-            `).join("");
-            recoBody.innerHTML = rows;
+            // 전역 변수에 저장
+            allRecommendations = data || [];
+            
+            // 현재 활성화된 칩 확인해서 그리기
+            const activeChip = document.querySelector("#category-chips .chip.active");
+            const currentKey = activeChip ? activeChip.dataset.category : 'all';
+            
+            renderTable(currentKey);
+
         } catch (e) {
             recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">추천을 불러오지 못했습니다.</td></tr>`;
         }
@@ -185,18 +245,15 @@ document.addEventListener("DOMContentLoaded", function () {
             const body = {};
             if (timetableUrl) body.timetableUrl = timetableUrl;
             await fetchWithAuth(`${apiBase}/sync/everytime`, {
-                method: "POST",
-                body: JSON.stringify(body)
+                method: "POST", body: JSON.stringify(body)
             });
-        } catch (e) {
-            console.warn("sync failed", e);
-        }
+        } catch (e) { console.warn("sync failed", e); }
     }
 
     function startSyncLoop() {
         if (syncTimer) clearInterval(syncTimer);
         triggerSync();
-        syncTimer = setInterval(triggerSync, 10 * 60 * 1000); // 10분
+        syncTimer = setInterval(triggerSync, 10 * 60 * 1000);
     }
 
     async function checkSession() {
@@ -206,9 +263,7 @@ document.addEventListener("DOMContentLoaded", function () {
             setLoggedIn(studentId, token);
             loadRecommendations();
             loadPrograms();
-        } catch (e) {
-            setLoggedOut();
-        }
+        } catch (e) { setLoggedOut(); }
     }
 
     loginForm.addEventListener("submit", async (e) => {
@@ -234,41 +289,16 @@ document.addEventListener("DOMContentLoaded", function () {
             passwordInput.value = "";
             loadRecommendations();
             loadPrograms();
-        } catch (err) {
-            alert("로그인에 실패했습니다.");
-        }
+        } catch (err) { alert("로그인에 실패했습니다."); }
     });
 
     logoutBtn.addEventListener("click", async () => {
         if (!token) return;
-        try {
-            await fetchWithAuth(`${apiBase}/logout`, { method: "POST" });
-        } catch (e) {
-            // ignore
-        }
+        try { await fetchWithAuth(`${apiBase}/logout`, { method: "POST" }); } catch (e) {}
         setLoggedOut();
     });
 
-    chips.forEach(chip => {
-        chip.addEventListener("click", () => {
-            chips.forEach(c => c.classList.remove("active"));
-            chip.classList.add("active");
-            const category = chip.dataset.category;
-            window.location.href = `/?category=${category}`;
-        });
-    });
-
-    const currentCategory = "{{ current_category }}";
-    chips.forEach(chip => {
-        if (chip.dataset.category === currentCategory) {
-            chip.classList.add("active");
-        }
-    });
-
-    if (timetableUrl) {
-        timetableUrlInput.value = timetableUrl;
-    }
-
+    if (timetableUrl) timetableUrlInput.value = timetableUrl;
     checkSession();
 });
 </script>

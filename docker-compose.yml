@@ -41,8 +41,8 @@ services:
         condition: service_healthy
     environment:
       RABBITMQ_HOST: rabbitmq
-      # WEIN_ID: "" 
-      # WEIN_PW: ""
+      #WEIN_ID: "아이디입력" 
+      #WEIN_PW: "비밀번호입력"
     restart: on-failure
 
   # 4. 추천 엔진 (Consumer) - [수정됨]
@@ -74,6 +74,15 @@ services:
     environment:
       RABBITMQ_HOST: rabbitmq
       DB_HOST: db
-
+  #6. 대시보드
+  dashboard:
+      build: ./dashboard
+      container_name: kumfit-dashboard
+      depends_on:
+        - api-gateway
+      ports:
+        - "5001:5001"
+      environment:
+        - API_BASE=http://localhost:5000
 volumes:
   db_data:
