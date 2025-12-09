@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
+# 3-1. 크롬 공통 설정(윈도우 사이즈, 스케일) 고정
+ENV CHROME_WINDOW_SIZE=1920,1080 \
+    CHROME_DEVICE_SCALE_FACTOR=1
+
 # 4. 라이브러리 설치
 # (docker-compose context가 루트이므로 경로 명시)
 COPY producer/requirements.txt .

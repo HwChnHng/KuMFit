@@ -43,6 +43,33 @@ def get_korean_weekday(date_obj):
     days = ["월", "화", "수", "목", "금", "토", "일"]
     return days[date_obj.weekday()]
 
+# 에브리타임 결과 보정: +9시간, 끝시간은 2분 줄임
+TIME_OFFSET_MIN = 9 * 60
+END_TRIM_MIN = 2
+
+
+def minutes_to_str(minutes: int) -> str:
+    minutes = minutes % (24 * 60)
+    h, m = divmod(minutes, 60)
+    return f"{h:02d}:{m:02d}"
+
+
+def adjust_time_range(start_str: str, end_str: str):
+    start_min = parse_time_str(start_str)
+    end_min = parse_time_str(end_str)
+    if start_min is None or end_min is None:
+        return start_str, end_str
+
+    start_adj = start_min + TIME_OFFSET_MIN
+    end_adj = end_min + TIME_OFFSET_MIN - END_TRIM_MIN
+
+    # 음수 방지 및 24시간 래핑
+    start_adj = start_adj % (24 * 60)
+    end_adj = end_adj % (24 * 60)
+
+    return minutes_to_str(start_adj), minutes_to_str(end_adj)
+
+
 def check_conflict(program, user_timetable):
     if not program.run_time_text:
         return False
@@ -160,10 +187,13 @@ def handle_everytime(ch, method, properties, body):
         # DB 저장용 데이터 변환
         timetable = []
         for item in raw_tt:
+            start_time = item.get("start", "")
+            end_time = item.get("end", "")
+            start_time, end_time = adjust_time_range(start_time, end_time)
             timetable.append({
                 "day": item.get("day", ""),
-                "start_time": item.get("start", ""),
-                "end_time": item.get("end", ""),
+                "start_time": start_time,
+                "end_time": end_time,
                 "subject_name": item.get("subject_name") or item.get("title", ""),
                 "classroom": item.get("classroom", "")
             })

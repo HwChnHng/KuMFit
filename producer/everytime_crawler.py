@@ -1,3 +1,4 @@
+import os
 import re
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -141,6 +142,11 @@ def px_to_time_and_slots(top_px, height_px, base_hour, base_top, px_per_hour):
 #             ...
 #          ]
 # ----------------------------------------------------------------------
+# 공통 헤드리스 옵션을 환경변수로 고정
+CHROME_WINDOW_SIZE = os.getenv("CHROME_WINDOW_SIZE", "1920,1080")
+CHROME_DEVICE_SCALE_FACTOR = os.getenv("CHROME_DEVICE_SCALE_FACTOR", "1")
+
+
 def crawl_shared_timetable(url: str):
     if url.startswith("everytime.kr"):
         url = "https://" + url
@@ -150,7 +156,8 @@ def crawl_shared_timetable(url: str):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
+    options.add_argument(f"--force-device-scale-factor={CHROME_DEVICE_SCALE_FACTOR}")
+    options.add_argument(f"--window-size={CHROME_WINDOW_SIZE}")
     options.add_argument(
         "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
     )
