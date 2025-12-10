@@ -65,6 +65,7 @@ class Program(Base):
     target_audience = Column(String(200))
     mileage = Column(Integer, default=0)
     detail_url = Column(String(500))
+    updated_at = Column(DateTime, default=datetime.now)
 
     def __repr__(self):
         return f"<Program {self.title} ({self.topic})>"

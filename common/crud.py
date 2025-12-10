@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List
 
 from sqlalchemy.orm import Session
@@ -96,6 +96,8 @@ def get_timetables(db: Session, student_id: str):
 # ---------------------------------------------------------
 def save_programs(db: Session, program_data: List[Dict]):
     """전체 비교과 프로그램 목록 갱신"""
+    # KST 기준 타임스탬프
+    now_kst = datetime.utcnow() + timedelta(hours=9)
     try:
         # 전체 삭제 후 재삽입 (단순 동기화 전략)
         db.query(Program).delete()
@@ -111,6 +113,7 @@ def save_programs(db: Session, program_data: List[Dict]):
                 target_audience=item.get("target_audience"),
                 mileage=item.get("mileage", 0),
                 detail_url=item.get("detail_url"),
+                updated_at=now_kst,
             )
             db.add(prog)
 
@@ -157,7 +160,6 @@ def save_recommendation(db: Session, student_id: str, results: List[Dict]):
 
 def get_recommendation(db: Session, student_id: str):
     """학생의 추천 결과 조회(API Gateway)"""
-    rec = (
+    return (
         db.query(Recommendation).filter(Recommendation.student_id == student_id).first()
     )
-    return rec.result_json if rec else []

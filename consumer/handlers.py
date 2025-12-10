@@ -27,7 +27,7 @@ def handle_everytime(ch, method, properties, body):
         if not validate_message(msg, EVERYTIME_SCHEMA):
             raise ValueError("invalid payload")
 
-        student_id = msg.get("studentId")
+        student_id = msg.get("studentId") or msg.get("StudentId")
         timetable_url = msg.get("timetableUrl") or EVERYTIME_URL_DEFAULT
         print(f" [everytime] sync 요청 수신: {student_id}")
 

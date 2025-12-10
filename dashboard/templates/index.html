@@ -17,6 +17,7 @@
             <input type="text" id="timetableUrl" name="timetableUrl" placeholder="에브리타임 시간표 공유 URL" />
             <button type="submit">로그인</button>
             <button type="button" id="logout-btn" disabled>로그아웃</button>
+            <button type="button" id="delete-btn" class="danger" disabled>탈퇴</button>
         </form>
         <span class="user-name" id="login-status">로그인 필요</span>
     </div>
@@ -89,6 +90,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const chips = document.querySelectorAll("#category-chips .chip");
     const loginForm = document.getElementById("login-form");
     const logoutBtn = document.getElementById("logout-btn");
+    const deleteBtn = document.getElementById("delete-btn");
     const loginStatus = document.getElementById("login-status");
     const recoBody = document.getElementById("reco-body");
     const programList = document.getElementById("program-list");
@@ -101,6 +103,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let studentId = localStorage.getItem("kumfit_studentId") || "";
     let timetableUrl = localStorage.getItem("kumfit_timetableUrl") || "";
     let syncTimer = null;
+    let pollTimer = null;
 
     // -----------------------------------------------------------
     // [핵심 3] 화면 그리기 전담 함수 (필터링 기능 포함)
@@ -167,6 +170,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         loginStatus.textContent = `로그인: ${id}`;
         logoutBtn.disabled = false;
+        deleteBtn.disabled = false;
         startSyncLoop();
     }
 
@@ -179,9 +183,11 @@ document.addEventListener("DOMContentLoaded", function () {
         timetableUrl = "";
         loginStatus.textContent = "로그인 필요";
         logoutBtn.disabled = true;
+        deleteBtn.disabled = true;
         recoBody.innerHTML = `<tr><td colspan="3" class="empty-text">로그인 후 추천을 불러옵니다.</td></tr>`;
         programList.innerHTML = `<li class="program-item"><div class="program-title">로그인 후 프로그램을 불러옵니다.</div></li>`;
         if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     }
 
     async function fetchWithAuth(url, options = {}) {
@@ -203,7 +209,6 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!studentId || !token) return;
         try {
             const data = await fetchWithAuth(`${apiBase}/recommendations/${studentId}`);
-            // 전역 변수에 저장
             allRecommendations = data || [];
             
             // 현재 활성화된 칩 확인해서 그리기
@@ -254,6 +259,19 @@ document.addEventListener("DOMContentLoaded", function () {
         if (syncTimer) clearInterval(syncTimer);
         triggerSync();
         syncTimer = setInterval(triggerSync, 10 * 60 * 1000);
+        // 추천/프로그램 주기적 폴링 (1초, 최대 10회)
+        let pollCount = 0;
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(() => {
+            if (pollCount >= 10) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                return;
+            }
+            loadRecommendations();
+            loadPrograms();
+            pollCount += 1;
+        }, 1000);
     }
 
     async function checkSession() {
@@ -296,6 +314,20 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!token) return;
         try { await fetchWithAuth(`${apiBase}/logout`, { method: "POST" }); } catch (e) {}
         setLoggedOut();
+    });
+
+    deleteBtn.addEventListener("click", async () => {
+        if (!token || !studentId) return;
+        const ok = confirm("정말 탈퇴하시겠습니까? 저장된 데이터가 삭제됩니다.");
+        if (!ok) return;
+        try {
+            const res = await fetchWithAuth(`${apiBase}/users/${studentId}`, { method: "DELETE" });
+            if (!res.deleted) throw new Error("delete failed");
+            alert("탈퇴가 완료되었습니다.");
+            setLoggedOut();
+        } catch (e) {
+            alert("탈퇴에 실패했습니다.");
+        }
     });
 
     if (timetableUrl) timetableUrlInput.value = timetableUrl;

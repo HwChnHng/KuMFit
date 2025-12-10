@@ -4,6 +4,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
 import time
 import re
 import os
@@ -17,6 +18,9 @@ EMPLYM_URL = "https://wein.konkuk.ac.kr/redirect?url=/ptfol/imng/comprSbjtMngt/i
 GRUPDPT_URL = "https://wein.konkuk.ac.kr/redirect?url=/ptfol/imng/comprSbjtMngt/icmpNsbjtApl/grupDpt/findTotPcondList.do"
 
 MAX_PAGES = 10
+# 크롤링 전체 재시도 횟수/딜레이
+RETRY_ATTEMPTS = 3
+RETRY_DELAY_SEC = 3
 
 def extract_status_from_card(card):
     try:
@@ -39,6 +43,97 @@ def extract_status_from_card(card):
         return ""
     except:
         return ""
+
+
+def parse_card_html_fallback(html: str):
+    """
+    HTML 문자열을 받아 여러 셀렉터/정규식으로 정보 추출 (fallback 파서)
+    반환: dict(title, apply_period, run_period, site_status)
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # fallback 1: 기존 구조 유사
+    title_el = soup.select_one("div.text_box div.title a") or soup.select_one("div.title a")
+    title = title_el.text.strip() if title_el else ""
+
+    apply_el = soup.select_one("span.date01") or soup.find("span", class_=re.compile("date01"))
+    apply_period = apply_el.text.strip() if apply_el else ""
+
+    run_el = soup.select_one("span.date02") or soup.find("span", class_=re.compile("date02"))
+    run_period = run_el.text.strip() if run_el else ""
+
+    bottom_el = soup.select_one("div.bottom") or soup.select_one("div.btn_wrap") or soup.find("a", class_=re.compile("btn"))
+    status_text = bottom_el.text.strip() if bottom_el else ""
+    norm = re.sub(r"\s+", "", status_text)
+    if "신청완료" in norm:
+        site_status = "신청완료"
+    elif "대기신청" in norm or ("대기" in norm and "신청" in norm):
+        site_status = "대기신청"
+    elif "신청마감" in norm or "마감" in norm:
+        site_status = "신청마감"
+    elif "신청" in norm or "접수" in norm:
+        site_status = "신청"
+    else:
+        site_status = ""
+
+    # fallback 2: 정규식으로 날짜만이라도 뽑기
+    if not apply_period:
+        text_all = soup.get_text(" ", strip=True)
+        m = re.search(r"\d{4}\.\d{2}\.\d{2}\s*~\s*\d{4}\.\d{2}\.\d{2}", text_all)
+        if m:
+            apply_period = m.group(0)
+
+    return {
+        "title": title,
+        "apply_period": apply_period,
+        "run_period": run_period,
+        "site_status": site_status,
+    }
+
+
+def extract_card_fields(card):
+    """
+    기본 셀렉터 시도 후 실패/누락 시 fallback 파서 사용.
+    """
+    title = ""
+    apply_period = ""
+    run_period = ""
+    site_status = ""
+
+    # 기본 시도 (selenium)
+    try:
+        title_el = card.find_element(By.CSS_SELECTOR, "div.text_box div.title a")
+        title = title_el.text.strip()
+    except Exception:
+        pass
+
+    try:
+        date_apply_el = card.find_element(By.CSS_SELECTOR, "p.date span.date01")
+        apply_period = date_apply_el.text.strip()
+    except Exception:
+        pass
+
+    try:
+        date_run_el = card.find_element(By.CSS_SELECTOR, "p.date span.date02")
+        run_period = date_run_el.text.strip()
+    except Exception:
+        pass
+
+    site_status = extract_status_from_card(card)
+
+    # fallback 사용: 누락된 필드가 있으면 HTML 파서로 보완
+    if not (title and apply_period and run_period and site_status):
+        try:
+            html = card.get_attribute("outerHTML")
+            parsed = parse_card_html_fallback(html)
+            title = title or parsed.get("title", "")
+            apply_period = apply_period or parsed.get("apply_period", "")
+            run_period = run_period or parsed.get("run_period", "")
+            site_status = site_status or parsed.get("site_status", "")
+        except Exception:
+            pass
+
+    return title, apply_period, run_period, site_status
 def crawl_category(driver, list_url, category_name, max_pages=10):
     """
     이미 로그인된 driver를 받아서,
@@ -88,29 +183,7 @@ def crawl_category(driver, list_url, category_name, max_pages=10):
         print(f" → 카드 {len(cards)}개 발견")
 
         for idx, card in enumerate(cards, start=1):
-            # 1. 제목
-            try:
-                title_el = card.find_element(By.CSS_SELECTOR, "div.text_box div.title a")
-                title = title_el.text.strip()
-            except Exception:
-                title = ""
-
-            # 2. 신청기간
-            try:
-                date_apply_el = card.find_element(By.CSS_SELECTOR, "p.date span.date01")
-                apply_period = date_apply_el.text.strip()
-            except Exception:
-                apply_period = ""
-
-            # 3. 진행기간
-            try:
-                date_run_el = card.find_element(By.CSS_SELECTOR, "p.date span.date02")
-                run_period = date_run_el.text.strip()
-            except Exception:
-                run_period = ""
-
-            # 4. 상태 (버튼 텍스트)
-            status = extract_status_from_card(card)
+            title, apply_period, run_period, status = extract_card_fields(card)
 
             # "신청" / "대기신청"만 수집
             if status not in ("신청", "대기신청"):
@@ -132,63 +205,67 @@ def crawl_category(driver, list_url, category_name, max_pages=10):
 
 
 def crawl_weinzon(user_id, user_pw):
-    # [중요] Docker 환경설정
-    options = Options()
-    options.add_argument("--headless=new")  # [수정] 최신 헤드리스 모드 사용
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    
-    # Docker 내부 경로 지정
-    options.binary_location = "/usr/bin/chromium"
-    service = Service("/usr/bin/chromedriver")
-    
-    # 드라이버 실행
-    driver = None
-    try:
-        driver = webdriver.Chrome(service=service, options=options)
-    except Exception as e:
-        print(f" [Error] 드라이버 실행 실패: {e}")
-        return []
+    """
+    로그인부터 수집까지 실패 시 재시도하며, 파싱 실패는 fallback 파서로 보완.
+    """
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        driver = None
+        try:
+            # [중요] Docker 환경설정
+            options = Options()
+            options.add_argument("--headless=new")  # [수정] 최신 헤드리스 모드 사용
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--window-size=1920,1080")
 
-    all_results = []
-    try:
-        print(" [Login] 로그인 페이지 접속...")
-        driver.get(LOGIN_URL)
-        
-        # [수정] 입력창이 뜰 때까지 최대 10초 대기 (안전장치)
-        wait = WebDriverWait(driver, 10)
-        id_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input.input_id")))
-        pw_input = driver.find_element(By.CSS_SELECTOR, "input.input_pw")
-        login_btn = driver.find_element(By.CSS_SELECTOR, "#loginBtn")
+            # Docker 내부 경로 지정
+            options.binary_location = "/usr/bin/chromium"
+            service = Service("/usr/bin/chromedriver")
 
-        print(" [Login] 아이디/비번 입력 중...")
-        id_input.clear()
-        id_input.send_keys(str(user_id))
-        pw_input.clear()
-        pw_input.send_keys(str(user_pw))
-        
-        login_btn.click()
-        time.sleep(2) # 로그인 처리 대기
-        
-        # 로그인 성공 체크
-        if "login.do" in driver.current_url:
-            print(" [Fail] 로그인 실패 (아이디/비번 확인 필요)")
-            return []
+            # 드라이버 실행
+            driver = webdriver.Chrome(service=service, options=options)
 
-        print(" [Login] 성공! 크롤링 시작...")
-        
-        all_results += crawl_category(driver, GENL_URL, "일반비교과", MAX_PAGES)
-        all_results += crawl_category(driver, EMPLYM_URL, "취창업비교과", MAX_PAGES)
-        all_results += crawl_category(driver, GRUPDPT_URL, "단과대비교과", MAX_PAGES)
-        
-        return all_results
+            all_results = []
+            print(" [Login] 로그인 페이지 접속...")
+            driver.get(LOGIN_URL)
 
-    except Exception as e:
-        print(f" [Error] 크롤링 도중 상세 에러: {e}")
-        return []
-        
-    finally:
-        if driver:
-            driver.quit()
+            # [수정] 입력창이 뜰 때까지 최대 10초 대기 (안전장치)
+            wait = WebDriverWait(driver, 10)
+            id_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input.input_id")))
+            pw_input = driver.find_element(By.CSS_SELECTOR, "input.input_pw")
+            login_btn = driver.find_element(By.CSS_SELECTOR, "#loginBtn")
+
+            print(" [Login] 아이디/비번 입력 중...")
+            id_input.clear()
+            id_input.send_keys(str(user_id))
+            pw_input.clear()
+            pw_input.send_keys(str(user_pw))
+
+            login_btn.click()
+            time.sleep(2)  # 로그인 처리 대기
+
+            # 로그인 성공 체크
+            if "login.do" in driver.current_url:
+                raise RuntimeError("로그인 실패 (아이디/비번 확인 필요)")
+
+            print(" [Login] 성공! 크롤링 시작...")
+
+            all_results += crawl_category(driver, GENL_URL, "일반비교과", MAX_PAGES)
+            all_results += crawl_category(driver, EMPLYM_URL, "취창업비교과", MAX_PAGES)
+            all_results += crawl_category(driver, GRUPDPT_URL, "단과대비교과", MAX_PAGES)
+
+            return all_results
+
+        except Exception as e:
+            print(f" [Error] 크롤링 실패 ({attempt}/{RETRY_ATTEMPTS}): {e}")
+            if attempt >= RETRY_ATTEMPTS:
+                print(" [Error] 재시도 한계를 초과했습니다. 빈 결과 반환.")
+                return []
+            delay = RETRY_DELAY_SEC * attempt
+            print(f" [Retry] {delay}초 후 재시도...")
+            time.sleep(delay)
+
+        finally:
+            if driver:
+                driver.quit()

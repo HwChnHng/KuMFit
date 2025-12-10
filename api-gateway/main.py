@@ -42,9 +42,24 @@ class LoginInterface:
         self.sessions = sessions
 
     def login(self, student_id: str, name: str, password: str = None) -> str:
-        password_hash = hash_password(password) if password else None
         with SessionLocal() as db:
-            crud.create_user(db, student_id=student_id, name=name, password_hash=password_hash)
+            existing = crud.get_user_by_id(db, student_id=student_id)
+            if existing:
+                # 이름 불일치 시 거절
+                if existing.name != name:
+                    raise ValueError("name_mismatch")
+                # 비밀번호가 저장돼 있다면 검증 필요
+                if existing.password_hash:
+                    if not password or hash_password(password) != existing.password_hash:
+                        raise PermissionError("invalid_password")
+                # 비밀번호가 없고 새 비밀번호를 주면 설정
+                elif password:
+                    existing.password_hash = hash_password(password)
+                    db.commit()
+            else:
+                # 신규 사용자 생성
+                password_hash = hash_password(password) if password else None
+                crud.create_user(db, student_id=student_id, name=name, password_hash=password_hash)
         token = secrets.token_urlsafe(24)
         self.sessions[token] = student_id
         return token
@@ -100,8 +115,15 @@ def login():
     if not student_id or not name:
         return jsonify({"error": "studentId and name required"}), 400
 
-    token = login_interface.login(student_id, name, password)
-    return jsonify({"token": token, "studentId": student_id})
+    try:
+        token = login_interface.login(student_id, name, password)
+        return jsonify({"token": token, "studentId": student_id})
+    except ValueError as e:
+        if str(e) == "name_mismatch":
+            return jsonify({"error": "name mismatch"}), 400
+        raise
+    except PermissionError:
+        return jsonify({"error": "invalid credentials"}), 401
 
 
 @app.route("/logout", methods=["POST"])
@@ -135,7 +157,24 @@ def recommendations(student_id):
     if student_id != request.student_id:
         return jsonify({"error": "forbidden"}), 403
     rec = gateway_interface.get_recommendation(student_id)
-    return jsonify(rec or [])
+    data = rec.result_json if rec else []
+    return jsonify(data)
+
+
+@app.route("/users/<student_id>", methods=["DELETE"])
+@require_auth
+def delete_user(student_id):
+    if student_id != request.student_id:
+        return jsonify({"error": "forbidden"}), 403
+    with SessionLocal() as db:
+        ok = crud.delete_user(db, student_id)
+    if ok:
+        # 세션도 제거
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip()
+        login_interface.logout(token)
+        return jsonify({"deleted": True})
+    return jsonify({"deleted": False, "error": "not found"}), 404
 
 
 @app.route("/programs", methods=["GET"])
