@@ -26,8 +26,17 @@ class EventBroker:
                     pika.ConnectionParameters(host=self.mq_host)
                 )
                 self.channel = self.connection.channel()
-                # 큐 선언 (durable=True: RabbitMQ가 꺼져도 메시지 보존)
-                self.channel.queue_declare(queue=self.queue_name, durable=True)
+                # DLQ 포함 동일 설정으로 선언 (소비자와 선언 옵션 일치해야 함)
+                dlq_name = f"{self.queue_name}.dlq"
+                self.channel.queue_declare(queue=dlq_name, durable=True)
+                self.channel.queue_declare(
+                    queue=self.queue_name,
+                    durable=True,
+                    arguments={
+                        "x-dead-letter-exchange": "",
+                        "x-dead-letter-routing-key": dlq_name,
+                    },
+                )
                 print(f" [Broker] RabbitMQ({self.mq_host}) 연결 성공!")
                 return
             except pika.exceptions.AMQPConnectionError:
