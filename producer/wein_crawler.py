@@ -39,72 +39,97 @@ def extract_status_from_card(card):
         return ""
     except:
         return ""
-
 def crawl_category(driver, list_url, category_name, max_pages=10):
+    """
+    이미 로그인된 driver를 받아서,
+    해당 비교과 목록 페이지를 1페이지 ~ max_pages 페이지까지 크롤링한다.
+    리턴: [{category, title, apply_period, run_period, site_status}, ...]
+    """
     results = []
-    print(f"\n --- [{category_name}] 접속 시작 ---")
+
+    print("\n==============================")
+    print(f"[{category_name}] 크롤링 시작")
+    print(f"목록 URL: {list_url}")
+    print("==============================")
+
+    # 1페이지 진입
     driver.get(list_url)
-    time.sleep(1) # 페이지 로딩 대기
-    
+    time.sleep(2)
+    print(" → 1페이지 접속 완료, 현재 URL:", driver.current_url)
+
     for page in range(1, max_pages + 1):
-        print(f" [Page] {page}페이지 스캔 중...")
+        print(f"\n--- {category_name} : {page} 페이지 ---")
 
         if page > 1:
+            #  로컬에서 잘 되는 방식 그대로 사용: global.page(page)
             try:
-                # [수정됨] 페이지 이동 함수 호출 (위인전 사이트 방식)
-                driver.execute_script(f"fn_egov_link_page({page});") 
-                time.sleep(2) # 이동 대기
+                print(f"  → {page}페이지로 이동 (global.page 사용)")
+                driver.execute_script("return global.page(arguments[0]);", page)
+                time.sleep(2)  # 페이지 전환 대기
             except Exception as e:
-                print(f" [Skip] 페이지 이동 실패: {e}")
+                print(f" → {page} 페이지로 이동 실패. 여기까지 크롤링하고 이 분류는 종료. ({e})")
                 break
 
+        # 카드(li)가 로딩될 때까지 대기
         try:
-            # 카드 로딩 대기 (최대 5초)
-            WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.tab_wrap div.ul_list_wrap ul.ul_box li"))
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.tab_wrap div.ul_list_wrap ul.ul_box li")
+                )
             )
-            cards = driver.find_elements(By.CSS_SELECTOR, "div.tab_wrap div.ul_list_wrap ul.ul_box > li")
-            
-            if not cards:
-                print(" [End] 카드가 없어 종료합니다.")
-                break
-                
-            for card in cards:
-                try:
-                    title = card.find_element(By.CSS_SELECTOR, "div.text_box div.title a").text.strip()
-                    
-                    # 1. 신청 기간
-                    try:
-                        date_apply_el = card.find_element(By.CSS_SELECTOR, "p.date span.date01")
-                        apply_period = date_apply_el.text.strip()
-                    except:
-                        apply_period = ""
-
-                    # 2. [팀원 업데이트 반영] 진행 기간
-                    try:
-                        date_run_el = card.find_element(By.CSS_SELECTOR, "p.date span.date02")
-                        run_period = date_run_el.text.strip()
-                    except:
-                        run_period = ""
-
-                    # 3. 상태 확인
-                    status = extract_status_from_card(card)
-                    
-                    if status in ["신청", "대기신청"]:
-                        results.append({
-                            "category": category_name,
-                            "title": title,
-                            "apply_period": apply_period,
-                            "run_period": run_period,
-                            "site_status": status
-                        })
-                except:
-                    continue
-        except:
-            print(f" [End] {page}페이지에서 로딩 실패 또는 끝")
+        except Exception as e:
+            print(" → 카드 로딩 대기 중 에러, 이 분류는 여기까지.:", e)
             break
-            
+
+        cards = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div.tab_wrap div.ul_list_wrap ul.ul_box > li"
+        )
+        print(f" → 카드 {len(cards)}개 발견")
+
+        for idx, card in enumerate(cards, start=1):
+            # 1. 제목
+            try:
+                title_el = card.find_element(By.CSS_SELECTOR, "div.text_box div.title a")
+                title = title_el.text.strip()
+            except Exception:
+                title = ""
+
+            # 2. 신청기간
+            try:
+                date_apply_el = card.find_element(By.CSS_SELECTOR, "p.date span.date01")
+                apply_period = date_apply_el.text.strip()
+            except Exception:
+                apply_period = ""
+
+            # 3. 진행기간
+            try:
+                date_run_el = card.find_element(By.CSS_SELECTOR, "p.date span.date02")
+                run_period = date_run_el.text.strip()
+            except Exception:
+                run_period = ""
+
+            # 4. 상태 (버튼 텍스트)
+            status = extract_status_from_card(card)
+
+            # "신청" / "대기신청"만 수집
+            if status not in ("신청", "대기신청"):
+                continue
+
+            results.append(
+                {
+                    "category": category_name,
+                    "title": title,
+                    "apply_period": apply_period,
+                    "run_period": run_period,
+                    "site_status": status,
+                }
+            )
+
+    print(f"\n[{category_name}] 크롤링 종료. 총 {len(results)}개 수집.")
     return results
+
+
 
 def crawl_weinzon(user_id, user_pw):
     # [중요] Docker 환경설정
