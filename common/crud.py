@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 from sqlalchemy.orm import Session
@@ -135,6 +135,9 @@ def get_all_programs(db: Session):
 # ---------------------------------------------------------
 def save_recommendation(db: Session, student_id: str, results: List[Dict]):
     """추천 결과(JSON) 저장(Recommendation Consumer)"""
+    now_dt = datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(
+        timezone(timedelta(hours=9))
+    ).replace(tzinfo=None)
     try:
         # 기존 추천 내역 확인
         rec = (
@@ -145,9 +148,14 @@ def save_recommendation(db: Session, student_id: str, results: List[Dict]):
 
         if rec:
             rec.result_json = results
-            rec.created_at = datetime.now()
+            rec.updated_at = now_dt
         else:
-            rec = Recommendation(student_id=student_id, result_json=results)
+            rec = Recommendation(
+                student_id=student_id,
+                result_json=results,
+                created_at=now_dt,
+                updated_at=now_dt,
+            )
             db.add(rec)
 
         db.commit()

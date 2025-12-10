@@ -81,5 +81,6 @@ class Recommendation(Base):
     student_id = Column(String(20), ForeignKey("users.student_id"), nullable=False)
     result_json = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
 
     user = relationship("User", back_populates="recommendation")
