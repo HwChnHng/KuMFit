@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy.exc import OperationalError
 
 # Docker Compose 내부 통신용 URL (utf8mb4로 고정)
 DATABASE_URL = "mysql+pymysql://root:root@db:3306/kumfit?charset=utf8mb4"
@@ -26,6 +25,9 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

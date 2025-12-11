@@ -8,7 +8,7 @@ from flask_cors import CORS
 
 from broker.event_broker import EventBroker
 from common import crud
-from common.database import SessionLocal, init_db
+from common.database import get_db, init_db
 
 app = Flask(__name__)
 CORS(app)
@@ -42,7 +42,7 @@ class LoginInterface:
         self.sessions = sessions
 
     def login(self, student_id: str, name: str, password: str = None) -> str:
-        with SessionLocal() as db:
+        with get_db() as db:
             existing = crud.get_user_by_id(db, student_id=student_id)
             if existing:
                 # 이름 불일치 시 거절
@@ -87,12 +87,12 @@ class APIGatewayInterface:
         broker.close()
 
     def get_recommendation(self, student_id: str):
-        with SessionLocal() as db:
+        with get_db() as db:
             rec = crud.get_recommendation(db, student_id)
         return rec
 
     def get_programs(self):
-        with SessionLocal() as db:
+        with get_db() as db:
             programs = crud.get_all_programs(db)
         return programs
 
@@ -166,7 +166,7 @@ def recommendations(student_id):
 def delete_user(student_id):
     if student_id != request.student_id:
         return jsonify({"error": "forbidden"}), 403
-    with SessionLocal() as db:
+    with get_db() as db:
         ok = crud.delete_user(db, student_id)
     if ok:
         # 세션도 제거
