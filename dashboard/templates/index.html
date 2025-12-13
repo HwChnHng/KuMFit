@@ -263,7 +263,7 @@ document.addEventListener("DOMContentLoaded", function () {
         let pollCount = 0;
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => {
-            if (pollCount >= 10) {
+            if (pollCount >= 20) {
                 clearInterval(pollTimer);
                 pollTimer = null;
                 return;

@@ -1,7 +1,8 @@
 import re
 from datetime import datetime
 
-TIME_OFFSET_MIN = 9 * 60
+# 시간대 보정과 종료 트림을 사용하지 않는다 (에브리타임 공유표는 이미 현지 시각)
+TIME_OFFSET_MIN = 0
 END_TRIM_MIN = 2
 
 
@@ -32,7 +33,7 @@ def minutes_to_str(minutes: int) -> str:
 
 
 def adjust_time_range(start_str: str, end_str: str):
-    """에브리타임 시간 보정(+9h, 종료 2분 트림)"""
+    """에브리타임 시간 보정(+0h, 종료 2분 트림)"""
     start_min = parse_time_str(start_str)
     end_min = parse_time_str(end_str)
     if start_min is None or end_min is None:
